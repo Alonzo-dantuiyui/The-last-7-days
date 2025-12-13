@@ -73,6 +73,24 @@ export default function VisualNovel() {
   const handleProceed = useCallback(() => {
     if (view !== 'game') return;
 
+    // Special Video Logic: Video skip or end always proceeds immediately
+    if (currentNode.video) {
+        if (currentNode.nextId === 'END') {
+             // End of Game Logic
+             console.log('End of game reached (Video end).');
+             setSkipMode(false);
+             setAutoPlay(false);
+             setView('title');
+             setCurrentNodeId('start'); // Reset for next time
+             return;
+        }
+
+        if (currentNode.nextId && SCENARIO[currentNode.nextId]) {
+             setCurrentNodeId(currentNode.nextId);
+        }
+        return;
+    }
+
     // 1. If typing, finish instantly
     if (isTyping) {
       setDisplayedText(currentNode.text);
@@ -88,18 +106,28 @@ export default function VisualNovel() {
     }
 
     // 3. Move to next node
+    if (currentNode.nextId && currentNode.nextId === 'END') {
+       console.log('End of game reached.');
+       setSkipMode(false);
+       setAutoPlay(false);
+       setTimeout(() => {
+         setView('title');
+         setCurrentNodeId('start'); 
+       }, 3000);
+       return;
+    }
+
     if (currentNode.nextId && SCENARIO[currentNode.nextId]) {
       setCurrentNodeId(currentNode.nextId);
     } else {
-      // End of Game Logic
-      console.log('End of game reached.');
-      setSkipMode(false);
-      setAutoPlay(false);
-      // Wait a moment then return to title
-      setTimeout(() => {
-        setView('title');
-        setCurrentNodeId('start'); // Reset for next time
-      }, 3000);
+      // Fallback end
+       console.log('End of game reached (Fallback).');
+       setSkipMode(false);
+       setAutoPlay(false);
+       setTimeout(() => {
+         setView('title');
+         setCurrentNodeId('start'); 
+       }, 3000);
     }
   }, [view, isTyping, currentNode, skipMode, autoPlay]);
 
@@ -107,6 +135,9 @@ export default function VisualNovel() {
   useEffect(() => {
     if (view !== 'game') return;
     
+    // Disable auto/skip logic if video is playing (video handles its own progression via onEnded)
+    if (currentNode.video) return;
+
     let timer: ReturnType<typeof setTimeout>;
 
     if (!isTyping && !currentNode.choices) {
@@ -250,7 +281,7 @@ export default function VisualNovel() {
       {/* --- Layers --- */}
       
       {/* 1. Background */}
-      {currentNode.bg && (
+      {currentNode.bg && !currentNode.video && (
         <div className="absolute inset-0 bg-black">
           <img 
             key={currentNode.bg} 
@@ -262,25 +293,30 @@ export default function VisualNovel() {
       )}
 
       {/* 2. Sprites */}
-      {currentNode.sprites && currentNode.sprites.map((sprite) => {
+      {currentNode.sprites && !currentNode.video && currentNode.sprites.map((sprite) => {
         let positionClass = 'left-1/2 -translate-x-1/2'; 
-        if (sprite.position === 'left') positionClass = 'left-[15%] lg:left-[20%]';
-        if (sprite.position === 'right') positionClass = 'right-[15%] lg:right-[20%]';
-        if (sprite.position === 'center-close') positionClass = 'left-1/2 -translate-x-1/2 scale-125 origin-bottom';
+        let scaleClass = 'sm:scale-110 sm:origin-bottom'; 
+
+        if (sprite.position === 'left') positionClass = 'left-[10%] sm:left-[15%] lg:left-[20%]';
+        if (sprite.position === 'right') positionClass = 'right-[10%] sm:right-[15%] lg:right-[20%]';
+        if (sprite.position === 'center-close') {
+             positionClass = 'left-1/2 -translate-x-1/2 origin-bottom';
+             scaleClass = 'scale-125 sm:scale-150'; 
+        }
 
         return (
           <img
             key={sprite.image} 
             src={sprite.image}
             alt="character"
-            className={`absolute bottom-0 h-[85%] lg:h-[95%] max-h-screen object-contain transition-all duration-700 ease-in-out ${positionClass} animate-fadeIn z-10 pointer-events-none`}
+            className={`absolute bottom-0 h-[85%] sm:h-[100%] max-h-screen object-contain transition-all duration-700 ease-in-out ${positionClass} ${scaleClass} animate-fadeIn z-10 pointer-events-none`}
             style={{ opacity: sprite.opacity }}
           />
         );
       })}
 
       {/* 3. CG Overlay */}
-      {currentNode.cg && (
+      {currentNode.cg && !currentNode.video && (
         <div className="absolute inset-0 z-20 bg-black animate-fadeIn pointer-events-none">
           <img 
             src={currentNode.cg} 
@@ -289,8 +325,23 @@ export default function VisualNovel() {
           />
         </div>
       )}
+      
+      {/* 3.5 Video Overlay - Top Priority */}
+      {currentNode.video && (
+        <div className="absolute inset-0 z-[100] bg-black">
+          <video
+            key={currentNode.video}
+            src={currentNode.video}
+            className="w-full h-full object-contain"
+            autoPlay
+            onEnded={handleProceed}
+            onClick={(e) => { e.stopPropagation(); handleProceed(); }}
+          />
+        </div>
+      )}
 
       {/* 4. Controls & Menus (Top Right) */}
+      {!currentNode.video && (
       <div className="absolute top-4 right-4 z-50 flex gap-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
         <ControlButton label="保存" onClick={() => { setMenuTab('save'); setShowMenu(true); }} />
         <ControlButton label="读取" onClick={() => { setMenuTab('load'); setShowMenu(true); }} />
@@ -298,8 +349,10 @@ export default function VisualNovel() {
         <ControlButton label="快进" active={skipMode} onClick={() => { setSkipMode(!skipMode); setAutoPlay(false); }} />
         <ControlButton label="标题" onClick={() => setView('title')} />
       </div>
+      )}
 
-      {/* 5. Dialogue UI */}
+      {/* 5. Dialogue UI - Hide if video is playing */}
+      {!currentNode.video && (
       <div className="absolute bottom-0 w-full z-30 flex flex-col items-center pb-2 lg:pb-8 px-2 lg:px-16 pointer-events-none">
         
         {/* Choices */}
@@ -334,7 +387,7 @@ export default function VisualNovel() {
             </div>
           )}
 
-          <div className="w-full min-h-[160px] lg:min-h-[200px] bg-black/60 border border-white/20 lg:rounded-xl shadow-2xl p-6 lg:p-8 relative backdrop-blur-md transition-all duration-300">
+          <div className="w-full min-h-[160px] lg:min-h-[200px] bg-black/10 border border-white/5 lg:rounded-xl shadow-2xl p-6 lg:p-8 relative backdrop-blur-[2px] transition-all duration-300">
             <p className="text-xl lg:text-2xl leading-relaxed text-white font-serif whitespace-pre-wrap tracking-wide drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">
               {displayedText}
               {!isTyping && !currentNode.choices && (
@@ -356,6 +409,7 @@ export default function VisualNovel() {
           </div>
         </div>
       </div>
+      )}
 
       {/* 6. Save/Load Modal */}
       {showMenu && (
@@ -391,8 +445,7 @@ export default function VisualNovel() {
   );
 }
 
-// --- Sub Components ---
-
+// ... rest of the file (ControlButton and SaveLoadModal remain unchanged)
 const ControlButton: React.FC<{ label: string; onClick: () => void; active?: boolean }> = ({ label, onClick, active }) => (
   <button 
     onClick={onClick}

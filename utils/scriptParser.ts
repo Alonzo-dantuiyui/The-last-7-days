@@ -21,6 +21,7 @@ export const parseScript = (rawText: string): Record<string, ScriptNode> => {
   let currentBg = GAME_ASSETS.BG.Black;
   let currentSprites: any[] = [];
   let currentCg: string | undefined = undefined;
+  let currentVideo: string | undefined = undefined;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -30,6 +31,7 @@ export const parseScript = (rawText: string): Record<string, ScriptNode> => {
       const label = line.replace('#', '').trim();
       
       // If the previous node leads naturally into this label, link it.
+      // But NOT if the previous node already has a nextId (e.g. set by 【ReturnTitle】 or a Choice)
       if (previousNodeId && nodes[previousNodeId] && !nodes[previousNodeId].nextId && !nodes[previousNodeId].choices) {
         nodes[previousNodeId].nextId = label;
       }
@@ -44,7 +46,7 @@ export const parseScript = (rawText: string): Record<string, ScriptNode> => {
       const content = line.slice(1, -1);
       const [cmd, val] = content.split(/[:：]/).map(s => s.trim());
       
-      const validCommands = ['背景', 'BG', '立绘', 'Sprite', 'CG', '特效', 'Effect'];
+      const validCommands = ['背景', 'BG', '立绘', 'Sprite', 'CG', '特效', 'Effect', '返回标题', 'ReturnTitle', '视频', 'Video'];
 
       // Only treat it as a command if it is a KNOWN command
       if (validCommands.includes(cmd)) {
@@ -53,6 +55,7 @@ export const parseScript = (rawText: string): Record<string, ScriptNode> => {
           if (url) {
               currentBg = url;
               currentCg = undefined; // BG clears CG
+              currentVideo = undefined; // BG clears Video? Actually video is transient usually
           }
         } else if (cmd === '立绘' || cmd === 'Sprite') {
           // Format: 立绘：WSN_Daily (center)
@@ -70,11 +73,19 @@ export const parseScript = (rawText: string): Record<string, ScriptNode> => {
         } else if (cmd === 'CG') {
           const url = findKey(GAME_ASSETS.CG, val);
           if (url) currentCg = url;
+        } else if (cmd === '视频' || cmd === 'Video') {
+          const url = findKey(GAME_ASSETS.VIDEO, val);
+          if (url) currentVideo = url;
         } else if (cmd === '特效' || cmd === 'Effect') {
            // Effect logic would be stored in state if we wanted it persistent, 
            // but 'shake'/'flash' are transient on the node.
            // We can attach it to the next node created.
            // For now, ignoring complex effect state.
+        } else if (cmd === '返回标题' || cmd === 'ReturnTitle') {
+             // Explicitly mark the end of a path
+             if (previousNodeId && nodes[previousNodeId]) {
+                 nodes[previousNodeId].nextId = 'END';
+             }
         }
         continue; // Command consumed
       }
@@ -144,9 +155,13 @@ export const parseScript = (rawText: string): Record<string, ScriptNode> => {
         speaker: speaker,
         bg: currentBg,
         cg: currentCg,
+        video: currentVideo, // Attach video
         sprites: currentCg ? [] : [...currentSprites], 
         nextId: undefined
     };
+
+    // Video is transient for a single node, usually. Reset it.
+    if (currentVideo) currentVideo = undefined;
 
     previousNodeId = thisId;
     nextNodeId = undefined; // Consumed

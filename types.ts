@@ -12,6 +12,7 @@ export interface GameAssetMap {
   BG: Record<string, string>;
   LH: Record<string, string>;
   CG: Record<string, string>;
+  VIDEO: Record<string, string>;
 }
 
 export interface SpriteState {
@@ -27,6 +28,7 @@ export interface ScriptNode {
   speaker?: string; // If undefined, it's narration
   bg?: string; // URL of background
   cg?: string; // URL of CG (Overlays everything)
+  video?: string; // URL of Video (Overlays everything, plays once)
   
   // Character Management
   sprites?: SpriteState[]; // Characters visible in this frame

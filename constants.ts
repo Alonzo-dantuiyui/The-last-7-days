@@ -66,5 +66,8 @@ export const GAME_ASSETS: GameAssetMap = {
     
     // Mappings for script compatibility
     TrueEnd: toRaw('https://github.com/Alonzo-dantuiyui/assets/blob/main/cg.sxydy.png'), 
+  },
+  VIDEO: {
+    ED: toRaw('https://github.com/Alonzo-dantuiyui/assets/blob/main/ed.mp4')
   }
 };

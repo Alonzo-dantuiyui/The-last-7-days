@@ -18,6 +18,7 @@ export default function VisualNovel() {
   // Game Flow State
   const [view, setView] = useState<'title' | 'game'>('title');
   const [currentNodeId, setCurrentNodeId] = useState<string>('start');
+  const [history, setHistory] = useState<string[]>([]); // Track path taken
   
   // Playback State
   const [displayedText, setDisplayedText] = useState('');
@@ -27,15 +28,50 @@ export default function VisualNovel() {
   
   // UI State
   const [showMenu, setShowMenu] = useState(false); // Modal for Save/Load
+  const [showHistory, setShowHistory] = useState(false); // Modal for Backlog
   const [menuTab, setMenuTab] = useState<'save' | 'load'>('save');
   const [effectClass, setEffectClass] = useState('');
   
+  // Interaction Control
+  // Ref to hold the typing interval ID so we can clear it manually
+  const typingIntervalRef = useRef<any>(null);
+  
   const currentNode: ScriptNode = SCENARIO[currentNodeId] || SCENARIO['start'];
+
+  // --- Navigation Helpers ---
+
+  // Unified function to change nodes and record history
+  const navigateTo = useCallback((nextId: string) => {
+    setHistory(prev => [...prev, currentNodeId]);
+    setCurrentNodeId(nextId);
+  }, [currentNodeId]);
+
+  // Jump back to a previous point in history
+  const handleJumpToHistory = (index: number) => {
+    const targetId = history[index];
+    // History should retain elements UP TO index (exclusive), so when we arrive at targetId, history matches previous state
+    const newHistory = history.slice(0, index);
+    
+    // Close modal and reset states first
+    setShowHistory(false);
+    setSkipMode(false);
+    setAutoPlay(false);
+    
+    // Apply navigation
+    setHistory(newHistory);
+    setCurrentNodeId(targetId);
+  };
 
   // --- Core Game Loop ---
 
   // Typewriter Effect
   useEffect(() => {
+    // Clear any existing interval
+    if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+    }
+
     setDisplayedText('');
     setIsTyping(true);
     let index = 0;
@@ -44,16 +80,24 @@ export default function VisualNovel() {
     // Typing speed: Skip = 2ms, Normal = 30ms
     const speed = skipMode ? 2 : 30;
 
-    const intervalId = setInterval(() => {
+    const id = setInterval(() => {
       index++;
       setDisplayedText(fullText.substring(0, index));
       if (index >= fullText.length) {
-        clearInterval(intervalId);
+        clearInterval(id);
         setIsTyping(false);
+        typingIntervalRef.current = null;
       }
     }, speed);
 
-    return () => clearInterval(intervalId);
+    typingIntervalRef.current = id;
+
+    return () => {
+        clearInterval(id);
+        if (typingIntervalRef.current === id) {
+            typingIntervalRef.current = null;
+        }
+    };
   }, [currentNodeId, currentNode.text, skipMode]);
 
   // Effect Handling (Shake/Flash)
@@ -82,17 +126,23 @@ export default function VisualNovel() {
              setAutoPlay(false);
              setView('title');
              setCurrentNodeId('start'); // Reset for next time
+             setHistory([]);
              return;
         }
 
         if (currentNode.nextId && SCENARIO[currentNode.nextId]) {
-             setCurrentNodeId(currentNode.nextId);
+             navigateTo(currentNode.nextId);
         }
         return;
     }
 
     // 1. If typing, finish instantly
     if (isTyping) {
+      // CRITICAL FIX: Clear the interval to prevent it from overwriting the full text
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+      }
       setDisplayedText(currentNode.text);
       setIsTyping(false);
       return;
@@ -112,13 +162,14 @@ export default function VisualNovel() {
        setAutoPlay(false);
        setTimeout(() => {
          setView('title');
-         setCurrentNodeId('start'); 
+         setCurrentNodeId('start');
+         setHistory([]); 
        }, 3000);
        return;
     }
 
     if (currentNode.nextId && SCENARIO[currentNode.nextId]) {
-      setCurrentNodeId(currentNode.nextId);
+      navigateTo(currentNode.nextId);
     } else {
       // Fallback end
        console.log('End of game reached (Fallback).');
@@ -126,10 +177,11 @@ export default function VisualNovel() {
        setAutoPlay(false);
        setTimeout(() => {
          setView('title');
-         setCurrentNodeId('start'); 
+         setCurrentNodeId('start');
+         setHistory([]); 
        }, 3000);
     }
-  }, [view, isTyping, currentNode, skipMode, autoPlay]);
+  }, [view, isTyping, currentNode, skipMode, autoPlay, navigateTo]);
 
   // Auto Play & Skip Logic trigger
   useEffect(() => {
@@ -187,6 +239,7 @@ export default function VisualNovel() {
     if (save) {
       if (SCENARIO[save.nodeId]) {
         setCurrentNodeId(save.nodeId);
+        setHistory([]); // Reset history on load usually
         setView('game');
         setShowMenu(false);
         setSkipMode(false);
@@ -201,14 +254,10 @@ export default function VisualNovel() {
 
   const handleStartGame = () => {
     setCurrentNodeId('start');
+    setHistory([]);
     setView('game');
     setSkipMode(false);
     setAutoPlay(false);
-  };
-
-  const toggleMenu = () => {
-    setShowMenu(!showMenu);
-    if (!showMenu) setMenuTab('save'); // Default to save when opening in-game
   };
 
   // --- RENDERERS ---
@@ -342,9 +391,11 @@ export default function VisualNovel() {
 
       {/* 4. Controls & Menus (Top Right) */}
       {!currentNode.video && (
-      <div className="absolute top-4 right-4 z-50 flex gap-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute top-4 right-4 z-50 flex flex-wrap justify-end gap-2 pointer-events-auto max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
         <ControlButton label="保存" onClick={() => { setMenuTab('save'); setShowMenu(true); }} />
         <ControlButton label="读取" onClick={() => { setMenuTab('load'); setShowMenu(true); }} />
+        <ControlButton label="回顾" onClick={() => setShowHistory(true)} />
+        <div className="w-2" /> {/* Spacer */}
         <ControlButton label="自动" active={autoPlay} onClick={() => { setAutoPlay(!autoPlay); setSkipMode(false); }} />
         <ControlButton label="快进" active={skipMode} onClick={() => { setSkipMode(!skipMode); setAutoPlay(false); }} />
         <ControlButton label="标题" onClick={() => setView('title')} />
@@ -361,7 +412,7 @@ export default function VisualNovel() {
             {currentNode.choices.map((choice, index) => (
               <button
                 key={index}
-                onClick={(e) => { e.stopPropagation(); setCurrentNodeId(choice.targetId); }}
+                onClick={(e) => { e.stopPropagation(); navigateTo(choice.targetId); }}
                 className={`
                   py-3 px-8 text-lg font-bold border-2 rounded shadow-2xl backdrop-blur-md transition-all hover:scale-105
                   ${choice.style === 'danger' 
@@ -421,6 +472,52 @@ export default function VisualNovel() {
              onSelect={menuTab === 'save' ? handleSave : handleLoad}
            />
         </div>
+      )}
+      
+      {/* 7. History Modal - Increased Z-Index to cover everything */}
+      {showHistory && (
+         <div className="absolute inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-[90%] h-[90%] bg-gray-900/95 border border-gray-600 rounded-lg flex flex-col shadow-2xl overflow-hidden relative">
+                <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                    <h2 className="text-2xl text-white font-serif">剧情回顾</h2>
+                    <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-white px-4 py-2 text-xl">✕</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    {history.map((nodeId, idx) => {
+                        const node = SCENARIO[nodeId];
+                        // Only show nodes with text
+                        if (!node || !node.text) return null;
+                        return (
+                            <div key={idx} className="group flex flex-col border-b border-gray-800 pb-4 last:border-0 hover:bg-white/5 p-2 rounded transition-colors">
+                                <div className="flex justify-between items-baseline mb-1">
+                                    <span className="text-[#D4AF37] font-bold text-lg">{node.speaker || ''}</span>
+                                    <button 
+                                        type="button"
+                                        onClick={(e) => { 
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleJumpToHistory(idx); 
+                                        }}
+                                        className="cursor-pointer text-xs text-yellow-500 hover:text-yellow-300 border border-yellow-600 hover:border-yellow-400 px-3 py-1 rounded transition-colors ml-4 shrink-0 active:bg-yellow-900"
+                                    >
+                                        跳转至此
+                                    </button>
+                                </div>
+                                <p className="text-gray-300 text-base font-serif leading-relaxed whitespace-pre-wrap">{node.text}</p>
+                            </div>
+                        )
+                    })}
+                    {/* Show current node text as well */}
+                    <div className="flex flex-col p-2 bg-white/5 rounded">
+                        <span className="text-[#D4AF37] font-bold text-lg mb-1">{currentNode.speaker || ''}</span>
+                        <p className="text-white text-base font-serif leading-relaxed whitespace-pre-wrap">{currentNode.text}</p>
+                         <span className="text-xs text-yellow-500 mt-2">◀ 当前位置</span>
+                    </div>
+                    {/* Anchor for auto-scroll */}
+                    <div ref={(el) => el?.scrollIntoView({ behavior: 'auto' })} />
+                </div>
+            </div>
+         </div>
       )}
 
       {/* Global Styles */}

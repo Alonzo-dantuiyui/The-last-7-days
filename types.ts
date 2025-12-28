@@ -1,9 +1,9 @@
 
 export enum CharacterName {
   ME = "我",
-  LYX = "赖泳心",
-  WSN = "王思凝",
-  CJN = "池晋南",
+  LYX = "音理",
+  WSN = "花子",
+  CJN = "司祝",
   NARRATOR = "",
   UNKNOWN = "???"
 }

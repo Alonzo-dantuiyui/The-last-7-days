@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import VisualNovel from './components/VisualNovel';
 import { AssetLoader } from './components/AssetLoader';
@@ -25,7 +26,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="w-full h-screen bg-black text-white overflow-hidden relative">
+    // Changed from relative h-screen to fixed inset-0 to prevent browser chrome shifting and scrolling issues
+    <div className="fixed inset-0 w-full h-full bg-black text-white overflow-hidden touch-none">
       <VisualNovel />
     </div>
   );

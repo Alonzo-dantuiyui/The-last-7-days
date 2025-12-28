@@ -395,6 +395,7 @@ export default function VisualNovel() {
         <ControlButton label="保存" onClick={() => { setMenuTab('save'); setShowMenu(true); }} />
         <ControlButton label="读取" onClick={() => { setMenuTab('load'); setShowMenu(true); }} />
         <ControlButton label="回顾" onClick={() => setShowHistory(true)} />
+        {/* 'Recall' button removed as requested */}
         <div className="w-2" /> {/* Spacer */}
         <ControlButton label="自动" active={autoPlay} onClick={() => { setAutoPlay(!autoPlay); setSkipMode(false); }} />
         <ControlButton label="快进" active={skipMode} onClick={() => { setSkipMode(!skipMode); setAutoPlay(false); }} />
@@ -482,7 +483,8 @@ export default function VisualNovel() {
                     <h2 className="text-2xl text-white font-serif">剧情回顾</h2>
                     <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-white px-4 py-2 text-xl">✕</button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {/* Added overscroll-contain to prevent body scrolling underneath */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 overscroll-contain">
                     {history.map((nodeId, idx) => {
                         const node = SCENARIO[nodeId];
                         // Only show nodes with text
